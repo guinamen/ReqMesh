@@ -1,0 +1,26 @@
+# Fixture proposital de arquivo INVÁLIDO — exercita os principais
+# caminhos de erro do reqMeshVal.
+#
+# Problemas embutidos:
+#   1. declara idioma pt, mas usa "name" (alias do idioma en)
+#   2. "prioridade" com valor "high" (alias do idioma en)
+#   3. "fluxo_principal" ausente (obrigatório para caso_de_uso)
+#   4. "pre_condicoes" com item numérico em vez de texto
+#   5. "gatilho" com valor numérico em vez de texto
+#   6. relação sem o subcampo obrigatório "alvo"
+#   7. campo "cor" que não existe em nenhum idioma
+
+schema_id = "elemento-requisito-v1;pt_BR"
+
+id = "99-exemplo-quebrado"
+tipo = "caso_de_uso"
+name = "Nome escrito no idioma errado"
+
+gatilho = 42
+prioridade = "high"
+cor = "azul"
+
+pre_condicoes = ["Usuário autenticado", 7]
+
+[[relacoes]]
+tipo = "incluir"

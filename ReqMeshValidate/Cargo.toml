@@ -1,0 +1,15 @@
+[package]
+name = "ReqMeshValidate"
+version = "0.1.0"
+edition = "2021"
+description = "Validador de arquivos de Elemento de Requisito (ReqMesh) contra um arquivo de schema localizado"
+
+# O nome do binário segue o formato de invocação pedido.
+[[bin]]
+name = "reqMeshVal"
+path = "src/main.rs"
+
+[dependencies]
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+chrono = "0.4"
