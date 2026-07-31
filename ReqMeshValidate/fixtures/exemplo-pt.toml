@@ -1,0 +1,38 @@
+schema_id = "elemento-requisito-v1;pt_BR"
+
+id = "01-login-usuario"
+tipo = "caso_de_uso"
+nome = "Login do usuário"
+
+gatilho = "Usuário acessa a página inicial e clica em 'Entrar'"
+prioridade = "alta"
+nivel = "objetivo_usuario"
+frequencia = "Múltiplas vezes por dia, por usuário"
+
+descricao = """
+Permite que o usuário autentique-se no sistema usando **e-mail e senha**.
+"""
+
+pre_condicoes = ["Usuário possui conta cadastrada"]
+
+fluxo_principal = [
+  "Usuário informa e-mail e senha",
+  "Sistema valida credenciais",
+  "Sistema redireciona para o painel",
+]
+
+pos_condicoes = ["Usuário autenticado com sessão ativa"]
+garantia_minima = ["Nenhuma sessão parcial ou inconsistente é criada em caso de falha"]
+requisitos_especiais = ["Resposta em até 1 segundo em 95% das tentativas"]
+questoes_em_aberto = ["Definir política de bloqueio após tentativas malsucedidas"]
+
+[[fluxos_alternativos]]
+condicao = "Credenciais inválidas"
+passos = [
+  "Sistema exibe mensagem de erro",
+  "Retorna ao passo 1 do fluxo principal",
+]
+
+[[relacoes]]
+tipo = "incluir"
+alvo = "02-validar-credenciais"

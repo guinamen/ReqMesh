@@ -1,0 +1,105 @@
+# Catálogo de mensagens — português.
+# As chaves são idênticas às de en.toml; só os valores mudam.
+
+[ui]
+titulo    = "=== reqMeshVal — relatório de validação ==="
+data      = "data"
+schema    = "schema"
+versao    = "versão"
+arquivos  = "arquivos"
+idioma    = "idioma"
+tipo      = "tipo"
+ok        = "OK"
+falha     = "FALHA"
+resumo    = "--- resumo ---"
+validos   = "válidos"
+falhas    = "falhas"
+erros     = "erros"
+avisos    = "avisos"
+
+nivel-erro  = "ERRO"
+nivel-aviso = "AVISO"
+
+local-arquivo = "<arquivo>"
+local-toml    = "<toml>"
+local-schema  = "<schema>"
+
+cli-idioma-invalido  = "erro: não há catálogo para o idioma '{idioma}' (disponíveis: {disponiveis})"
+cli-idioma-sem-valor = "erro: --idioma exige um valor (código de idioma ou 'auto')"
+cli-log-sem-caminho  = "erro: --log exige um caminho"
+cli-faltam-args      = "erro: informe o schema e ao menos um arquivo"
+schema-ilegivel  = "erro: não foi possível ler o schema '{caminho}': {erro}"
+schema-invalido  = "erro: schema '{caminho}' inválido: {erro}"
+log-nao-gravado  = "aviso: não foi possível gravar o log em '{caminho}': {erro}"
+catalogo-invalido = "aviso: ignorando catálogo de mensagens '{caminho}': {erro}"
+
+uso = """
+reqMeshVal — validador de Elementos de Requisito (ReqMesh)
+
+USO:
+    reqMeshVal <schema> <arquivo1> [arquivo2 ...] [opções]
+
+ARGUMENTOS:
+    <schema>      arquivo de schema (ex: elemento-requisito-v1.toml)
+    <arquivoN>    um ou mais arquivos de Elemento de Requisito
+
+OPÇÕES:
+    -i, --idioma <cod|auto>   idioma do log (auto = o idioma declarado
+                              por cada arquivo). Padrão: LANG, ou en
+    -c, --catalogos <dir>     carrega catálogos extras de <dir>/<cod>.toml
+        --idiomas             lista os idiomas disponíveis e sai
+    -l, --log <caminho>       grava o log também no arquivo indicado
+    -h, --help                mostra esta ajuda
+
+SAÍDA:
+    0  todos os arquivos válidos (avisos não reprovam)
+    1  pelo menos um arquivo com erro
+    2  erro de uso ou falha ao carregar o schema
+"""
+
+[plural.campos-reconhecidos]
+one   = "1 campo reconhecido"
+other = "{n} campos reconhecidos"
+
+[plural.erros]
+one   = "1 erro"
+other = "{n} erros"
+
+[plural.avisos]
+one   = "1 aviso"
+other = "{n} avisos"
+
+[msg]
+arquivo-ilegivel = "não foi possível ler o arquivo: {erro}"
+toml-invalido      = "TOML inválido: {erro}"
+nao-eh-tabela-raiz = "o arquivo não é uma tabela TOML de nível superior"
+schema-id-ausente = "campo obrigatório ausente — é '{campo}' que define schema e idioma do arquivo"
+versao-divergente = "arquivo declara a versão '{no_arquivo}', mas o schema carregado é '{carregado}'"
+schema-sem-campo-canonico = "o schema não define o campo canônico '{campo}'"
+schema-sem-alias-do-campo = "o schema não define alias de '{campo}' no idioma '{idioma}'"
+tipo-ausente = "campo obrigatório ausente — sem ele não é possível saber quais campos se aplicam"
+tipo-sem-campos-especificos = "tipo '{tipo}' não possui conjunto de campos específico no schema"
+
+esperado-texto         = "esperado texto, encontrado {encontrado}"
+esperado-lista-textos  = "esperado lista de textos, encontrado {encontrado}"
+esperado-lista-tabelas = "esperado lista de tabelas, encontrado {encontrado}"
+esperado-tabela        = "esperado tabela, encontrado {encontrado}"
+lista-vazia-obrigatoria = "campo obrigatório não pode ser uma lista vazia"
+
+enum-invalido = "valor '{valor}' inválido; válidos em '{idioma}': {permitidos}"
+enum-invalido-outro-idioma = "valor '{valor}' pertence ao idioma '{idioma_do_alias}' (canônico '{canonico}'), mas o arquivo declara '{idioma}'; válidos: {permitidos}"
+
+alias-de-outro-idioma          = "alias do idioma '{idioma_do_alias}' (campo canônico '{canonico}'), mas o arquivo declara idioma '{idioma_declarado}' — idiomas não podem ser misturados"
+alias-de-outro-idioma-subcampo = "alias do idioma '{idioma_do_alias}' (subcampo canônico '{canonico}'), mas o arquivo declara idioma '{idioma_declarado}'"
+
+campo-desconhecido    = "campo desconhecido: não corresponde a nenhum campo do schema no idioma '{idioma}'"
+subcampo-desconhecido = "subcampo desconhecido no idioma '{idioma}'"
+
+obrigatorio-ausente          = "campo obrigatório ausente (canônico: '{canonico}')"
+subcampo-obrigatorio-ausente = "subcampo obrigatório ausente (canônico: '{canonico}')"
+
+tipo-dado-desconhecido = "schema declara tipo_dado desconhecido '{tipo_dado}' — campo não verificado"
+sem-subcampos = "o schema não define subcampos para esta tabela — conteúdo não verificado"
+
+alias-ambiguo = "alias '{alias}' ({idioma}) é ambíguo: mapeia para '{anterior}' e '{atual}'"
+sem-alias-no-idioma = "campo '{canonico}' não tem alias no idioma '{idioma}' — não pode ser usado neste arquivo"

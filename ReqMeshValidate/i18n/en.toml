@@ -1,0 +1,134 @@
+# Catálogo de mensagens — inglês (idioma de fallback).
+#
+# Para adicionar um idioma: copie este arquivo para <codigo>.toml
+# (ex: es.toml) e traduza os valores. As CHAVES nunca mudam.
+#
+# Placeholders no formato {nome} são substituídos em runtime. Cada
+# mensagem só aceita os placeholders documentados ao lado dela; um
+# placeholder desconhecido fica literal no texto, sem quebrar nada.
+#
+# Chave ausente cai para o catálogo de fallback (en) e, se faltar lá
+# também, aparece como ⟨chave⟩ na saída — para o problema ficar visível.
+
+[ui]
+titulo    = "=== reqMeshVal — validation report ==="
+data      = "date"
+schema    = "schema"
+versao    = "version"
+arquivos  = "files"
+idioma    = "language"
+tipo      = "type"
+ok        = "OK"
+falha     = "FAILED"
+resumo    = "--- summary ---"
+validos   = "valid"
+falhas    = "failed"
+erros     = "errors"
+avisos    = "warnings"
+
+nivel-erro  = "ERROR"
+nivel-aviso = "WARN"
+
+local-arquivo = "<file>"
+local-toml    = "<toml>"
+local-schema  = "<schema>"
+
+# {idioma} {disponiveis}
+cli-idioma-invalido  = "error: no catalog for language '{idioma}' (available: {disponiveis})"
+cli-idioma-sem-valor = "error: --idioma requires a value (a language code or 'auto')"
+cli-log-sem-caminho  = "error: --log requires a path"
+cli-faltam-args      = "error: provide the schema and at least one file"
+# {caminho} {erro}
+schema-ilegivel  = "error: could not read schema '{caminho}': {erro}"
+schema-invalido  = "error: invalid schema '{caminho}': {erro}"
+log-nao-gravado  = "warning: could not write the log to '{caminho}': {erro}"
+# {caminho} {erro}
+catalogo-invalido = "warning: ignoring message catalog '{caminho}': {erro}"
+
+uso = """
+reqMeshVal — Requirement Element validator (ReqMesh)
+
+USAGE:
+    reqMeshVal <schema> <file1> [file2 ...] [options]
+
+ARGUMENTS:
+    <schema>      schema file (e.g. elemento-requisito-v1.toml)
+    <fileN>       one or more Requirement Element files
+
+OPTIONS:
+    -i, --idioma <code|auto>  log language (auto = each file's own
+                              declared language). Default: LANG, or en
+    -c, --catalogos <dir>     load extra message catalogs from <dir>/<code>.toml
+        --idiomas             list available languages and exit
+    -l, --log <path>          also write the log to the given file
+    -h, --help                show this help
+
+EXIT STATUS:
+    0  all files valid (warnings do not fail the run)
+    1  at least one file with errors
+    2  usage error or schema could not be loaded
+"""
+
+# Formas plurais. {n} é a contagem.
+[plural.campos-reconhecidos]
+one   = "1 field recognized"
+other = "{n} fields recognized"
+
+[plural.erros]
+one   = "1 error"
+other = "{n} errors"
+
+[plural.avisos]
+one   = "1 warning"
+other = "{n} warnings"
+
+[msg]
+# {erro}
+arquivo-ilegivel = "could not read file: {erro}"
+# {erro}
+toml-invalido      = "invalid TOML: {erro}"
+nao-eh-tabela-raiz = "file is not a top-level TOML table"
+# {campo}
+schema-id-ausente = "required field missing — '{campo}' is what declares the file's schema and language"
+# {no_arquivo} {carregado}
+versao-divergente = "file declares schema version '{no_arquivo}', but the loaded schema is '{carregado}'"
+# {campo}
+schema-sem-campo-canonico = "schema does not define canonical field '{campo}'"
+# {campo} {idioma}
+schema-sem-alias-do-campo = "schema defines no alias for '{campo}' in language '{idioma}'"
+tipo-ausente = "required field missing — without it there is no way to tell which fields apply"
+# {tipo}
+tipo-sem-campos-especificos = "type '{tipo}' has no type-specific field set in the schema"
+
+# {encontrado}
+esperado-texto         = "expected string, found {encontrado}"
+esperado-lista-textos  = "expected list of strings, found {encontrado}"
+esperado-lista-tabelas = "expected list of tables, found {encontrado}"
+esperado-tabela        = "expected table, found {encontrado}"
+lista-vazia-obrigatoria = "required field cannot be an empty list"
+
+# {valor} {idioma} {permitidos}
+enum-invalido = "invalid value '{valor}'; valid in '{idioma}': {permitidos}"
+# {valor} {idioma} {permitidos} {canonico} {idioma_do_alias}
+enum-invalido-outro-idioma = "value '{valor}' belongs to language '{idioma_do_alias}' (canonical '{canonico}'), but the file declares '{idioma}'; valid values: {permitidos}"
+
+# {canonico} {idioma_do_alias} {idioma_declarado}
+alias-de-outro-idioma          = "alias from language '{idioma_do_alias}' (canonical field '{canonico}'), but the file declares language '{idioma_declarado}' — languages cannot be mixed"
+alias-de-outro-idioma-subcampo = "alias from language '{idioma_do_alias}' (canonical subfield '{canonico}'), but the file declares language '{idioma_declarado}'"
+
+# {idioma}
+campo-desconhecido    = "unknown field: does not match any schema field in language '{idioma}'"
+subcampo-desconhecido = "unknown subfield in language '{idioma}'"
+
+# {canonico}
+obrigatorio-ausente          = "required field missing (canonical: '{canonico}')"
+subcampo-obrigatorio-ausente = "required subfield missing (canonical: '{canonico}')"
+
+# {tipo_dado}
+tipo-dado-desconhecido = "schema declares unknown tipo_dado '{tipo_dado}' — field not checked"
+sem-subcampos = "schema defines no subfields for this table — contents not checked"
+
+# {alias} {idioma} {anterior} {atual}
+alias-ambiguo = "alias '{alias}' ({idioma}) is ambiguous: maps to both '{anterior}' and '{atual}'"
+# {canonico} {idioma}
+sem-alias-no-idioma = "field '{canonico}' has no alias in language '{idioma}' — it cannot be used in this file"
