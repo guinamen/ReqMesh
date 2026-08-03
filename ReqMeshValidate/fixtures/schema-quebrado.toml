@@ -1,0 +1,7 @@
+# Fixture proposital: TOML sintaticamente inválido, para testar
+# que carregar_schema() distingue "arquivo ilegível" (erro de I/O)
+# de "arquivo inválido" (erro de parse TOML).
+
+[campos.tipo
+tipo_dado = "enum"
+obrigatorio = true

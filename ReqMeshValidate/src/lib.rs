@@ -1944,19 +1944,39 @@ mod testes {
     }
 
     /// Raiz e subtabela passam pela mesma função; o que muda é a família de
-    /// mensagens. Um campo desconhecido tem de sair como "campo" na raiz e
-    /// "subcampo" dentro do item.
+    /// mensagens e o prefixo do local. Montado em memória de propósito: a
+    /// asserção é sobre a unificação, não sobre o conteúdo de uma fixture.
     #[test]
     fn campo_desconhecido_muda_de_familia_conforme_o_nivel() {
-        let schema = schema_de_teste();
-        let rel = validar_arquivo(
-            &schema,
-            "elemento-requisito-v1",
-            &fixture("exemplo-invalido.toml"),
+        let campos: BTreeMap<String, DefCampo> = toml::from_str(
+            r#"
+            [conhecido]
+            tipo_dado = "string"
+            alias = { pt = "conhecido" }
+            "#,
+        )
+        .expect("campos de teste não parseiam");
+
+        let tabela: toml::value::Table =
+            toml::from_str("conhecido = \"ok\"\ndesconhecido = \"x\"\n").unwrap();
+
+        let mut raiz = Vec::new();
+        let (reconhecidos, vistos) = validar_campos(&campos, &tabela, "pt", "", false, &mut raiz);
+        assert_eq!(reconhecidos, 1);
+        assert!(vistos.contains("conhecido"));
+        assert_eq!(
+            raiz.iter().map(|d| d.msg.chave_e_args().0).collect::<Vec<_>>(),
+            vec!["campo-desconhecido"]
         );
-        let chaves = rel.chaves();
-        assert!(chaves.contains(&"campo-desconhecido"));
-        assert!(chaves.contains(&"subcampo-desconhecido"));
+        assert!(matches!(&raiz[0].local, Local::Campo(c) if c == "desconhecido"));
+
+        let mut sub = Vec::new();
+        validar_campos(&campos, &tabela, "pt", "relacoes[0]", true, &mut sub);
+        assert_eq!(
+            sub.iter().map(|d| d.msg.chave_e_args().0).collect::<Vec<_>>(),
+            vec!["subcampo-desconhecido"]
+        );
+        assert!(matches!(&sub[0].local, Local::Campo(c) if c == "relacoes[0].desconhecido"));
     }
 
     #[test]
