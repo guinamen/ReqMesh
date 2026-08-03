@@ -1,0 +1,211 @@
+schema_id = "elemento-requisito-v2;pt_BR"
+
+# --- escalares e listas simples primeiro (ver convenção de ordem) ---
+
+id = "UC-PIX-014"
+tipo = "caso_de_uso"
+nome = "Autorizar transferência Pix acima do limite noturno"
+nivel = "objetivo_usuario"
+prioridade = "alta"
+frequencia = "3 a 5 mil ocorrências por noite útil; pico de 4x nos dois últimos dias úteis do mês."
+
+descricao = """
+Entre 20h00 e 06h00 vigora um limite de valor por transferência Pix mais
+restritivo que o diurno. Quando o cliente confirma uma transferência acima
+desse limite dentro da janela noturna, a operação não é recusada de imediato:
+entra em autorização reforçada, em que o cliente prova posse do dispositivo
+cadastrado e a operação passa a ser avaliada contra o limite diurno.
+
+O escopo é a **decisão** de autorizar ou recusar. A liquidação junto ao SPI
+é de UC-PIX-002, incluído a partir de P8.
+"""
+
+gatilho = "O cliente confirma uma transferência Pix cujo valor excede o limite noturno da conta, com o horário do servidor dentro da janela das 20h00 às 06h00."
+
+pre_condicoes = [
+  "O cliente está autenticado na sessão com fator de posse válido.",
+  "A conta de origem tem saldo ou limite de crédito suficiente para o valor solicitado.",
+  "A chave Pix de destino foi resolvida junto ao DICT e está ativa.",
+  "O dispositivo em uso está cadastrado e vinculado ao CPF do cliente há pelo menos 24 horas.",
+]
+
+pos_condicoes = [
+  "A ordem de pagamento foi entregue ao SPI e o cliente recebeu a confirmação.",
+  "A decisão foi registrada na trilha de auditoria com o identificador da avaliação antifraude e o do desafio de posse.",
+  "O limite noturno consumido pelo cliente no dia corrente foi atualizado.",
+]
+
+garantia_minima = [
+  "A conta de origem nunca é debitada sem ordem entregue e confirmada pelo SPI.",
+  "Nenhuma tentativa produz mais de uma ordem de pagamento para o mesmo par (conta, chave de idempotência).",
+  "A trilha de auditoria registra a tentativa mesmo quando a operação é recusada em qualquer ponto.",
+  "O escore antifraude e o motivo da recusa nunca chegam ao cliente.",
+]
+
+requisitos_especiais = [
+  "A decisão de autorizar ou recusar cabe em 2 segundos no percentil 95, excluído o tempo de resposta do cliente ao desafio.",
+  "O desafio de posse expira em 90 segundos.",
+  "Recusa por antifraude e recusa por limite são indistinguíveis na interface e no tempo de resposta.",
+  "A janela noturna é avaliada em horário de Brasília, com tratamento explícito de horário de verão caso volte a vigorar.",
+]
+
+questoes_em_aberto = [
+  "O limite noturno consumido zera à meia-noite ou às 06h00? A virada de dia no meio da janela não foi decidida com produto.",
+  "Cliente com mais de um dispositivo cadastrado pode responder ao desafio em qualquer um, ou só naquele em que iniciou a sessão?",
+  "Autorização reforçada vale para contas com menos de 30 dias de abertura, ou essas caem direto na recusa?",
+]
+
+# --- array<tabela> depois ---
+
+[[fluxo_principal]]
+passo = "P1"
+acao = "O sistema identifica que o valor solicitado excede o limite noturno da conta."
+
+[[fluxo_principal]]
+passo = "P2"
+acao = "O sistema informa o limite vigente e oferece a autorização reforçada como alternativa à recusa."
+
+[[fluxo_principal]]
+passo = "P3"
+acao = "O cliente escolhe prosseguir com a autorização reforçada."
+
+[[fluxo_principal]]
+passo = "P4"
+acao = "O sistema solicita ao serviço de autenticação um desafio de posse no dispositivo cadastrado."
+
+[[fluxo_principal]]
+passo = "P5"
+acao = "O cliente responde ao desafio no dispositivo."
+
+[[fluxo_principal]]
+passo = "P6"
+acao = "O sistema submete a operação ao motor antifraude, informando que houve prova de posse."
+
+[[fluxo_principal]]
+passo = "P7"
+acao = "O motor antifraude devolve escore abaixo do limiar de bloqueio."
+
+[[fluxo_principal]]
+passo = "P8"
+acao = "O sistema aplica o limite diurno à operação e a encaminha para liquidação."
+
+[[fluxo_principal]]
+passo = "P9"
+acao = "O sistema confirma a autorização ao cliente e informa o saldo restante do limite noturno."
+
+[[fluxos_alternativos]]
+id = "FA-01"
+ancora = "P3"
+condicao = "O cliente recusa a autorização reforçada."
+passos = [
+  "O sistema encerra a tentativa sem enviar nada ao SPI.",
+  "O sistema oferece agendar a transferência para a abertura da janela diurna.",
+]
+
+[[fluxos_alternativos]]
+id = "FA-02"
+ancora = "P5"
+condicao = "O desafio de posse expira ou é respondido incorretamente três vezes."
+passos = [
+  "O sistema recusa a operação e registra a tentativa frustrada.",
+  "O sistema bloqueia novas autorizações reforçadas nesse dispositivo por 30 minutos.",
+  "O sistema notifica o cliente por um canal cadastrado distinto do dispositivo em uso.",
+]
+
+[[fluxos_alternativos]]
+id = "FA-03"
+ancora = "P7"
+condicao = "O motor antifraude devolve escore acima do limiar de bloqueio."
+passos = [
+  "O sistema recusa a operação sem revelar ao cliente o motivo nem o escore.",
+  "O sistema abre caso para análise humana com a prova de posse anexada.",
+]
+
+[[fluxos_alternativos]]
+id = "FA-04"
+ancora = "P8"
+condicao = "O SPI não confirma o recebimento da ordem em até 20 segundos."
+passos = [
+  "O sistema mantém a operação como pendente e não debita a conta de origem.",
+  "O sistema consulta o SPI pela ordem original, sem reenviá-la, até obter resposta definitiva.",
+]
+
+[[fluxos_alternativos]]
+id = "FA-05"
+condicao = "A janela noturna se encerra (06h00) antes da conclusão, em qualquer passo."
+passos = [
+  "O sistema conclui a operação sob as regras vigentes no instante da confirmação (P1), não no da liquidação.",
+]
+
+[[regras_de_negocio]]
+id = "RN-PIX-07"
+enunciado = "O limite noturno vigora das 20h00 às 06h00, horário de Brasília, e é avaliado no instante da confirmação, não no início da sessão."
+
+[[regras_de_negocio]]
+id = "RN-PIX-08"
+enunciado = "A autorização reforçada eleva a operação ao limite diurno da conta, nunca acima dele."
+
+[[regras_de_negocio]]
+id = "RN-PIX-09"
+enunciado = "A prova de posse vale para uma única operação e não pode ser reaproveitada em nova tentativa."
+
+[[regras_de_negocio]]
+id = "RN-PIX-10"
+enunciado = "Recusa por escore antifraude nunca revela ao cliente o motivo nem o escore, para não realimentar o atacante."
+
+[[criterios_aceitacao]]
+id = "CA-01"
+dado = "uma conta com limite noturno de R$ 1.000,00 e limite diurno de R$ 5.000,00, às 22h00"
+quando = "o cliente confirma uma transferência de R$ 3.000,00, responde corretamente ao desafio de posse e o escore antifraude fica abaixo do limiar"
+entao = "a transferência é autorizada e encaminhada ao SPI"
+
+[[criterios_aceitacao]]
+id = "CA-02"
+dado = "as mesmas condições de CA-01"
+quando = "o cliente confirma uma transferência de R$ 6.000,00"
+entao = "o sistema recusa sem oferecer autorização reforçada, porque o valor excede também o limite diurno"
+
+[[criterios_aceitacao]]
+id = "CA-03"
+dado = "uma tentativa em curso com desafio de posse pendente"
+quando = "o cliente erra o desafio três vezes"
+entao = "a operação é recusada e novas autorizações reforçadas ficam bloqueadas nesse dispositivo por 30 minutos"
+
+[[criterios_aceitacao]]
+id = "CA-04"
+dado = "uma operação já submetida ao SPI sem confirmação"
+quando = "o cliente aciona novamente o botão de confirmar"
+entao = "o sistema consulta a ordem original e não cria uma segunda ordem de pagamento"
+
+[[criterios_aceitacao]]
+id = "CA-05"
+dado = "uma transferência autorizada às 23h50 de uma segunda-feira"
+quando = "o cliente tenta outra transferência acima do limite noturno às 00h10 de terça"
+entao = "o limite noturno consumido é o do novo dia, e não a soma das duas noites"
+
+[[relacoes]]
+tipo = "estender"
+alvo = "UC-PIX-001"
+
+[[relacoes]]
+tipo = "incluir"
+alvo = "UC-PIX-002"
+
+[[relacoes]]
+tipo = "incluir"
+alvo = "UC-AUT-005"
+
+[[relacoes]]
+tipo = "interage_com"
+alvo = "ATOR-CLIENTE-PF"
+papel = "primario"
+
+[[relacoes]]
+tipo = "interage_com"
+alvo = "ATOR-MOTOR-ANTIFRAUDE"
+papel = "secundario"
+
+[[relacoes]]
+tipo = "interage_com"
+alvo = "ATOR-SPI"
+papel = "secundario"

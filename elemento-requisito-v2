@@ -1,0 +1,427 @@
+# ============================================================
+# Schema: elemento-requisito-v2
+# ============================================================
+# Sucessor de elemento-requisito-v1. Mudanças em relação ao v1
+# estão marcadas com [NOVO], [MOVIDO] ou [QUEBRA] no ponto de uso.
+#
+# BOOTSTRAP (fora deste schema, fixo, nunca localizado):
+#   schema_id = "<versao>;<locale>"
+#   Ver elemento-requisito-v1 para a descrição completa do
+#   procedimento de resolução — não mudou.
+#
+# ------------------------------------------------------------
+# CONVENÇÃO DE ORDEM DENTRO DO ARQUIVO — não é opcional
+# ------------------------------------------------------------
+# Em TOML, toda chave escrita depois de um cabeçalho [[tabela]]
+# pertence àquela tabela, não à raiz. Um arquivo que escreva
+# "pos_condicoes" depois do primeiro [[fluxos_alternativos]] não
+# é um arquivo com o campo no lugar errado: é um arquivo em que
+# o campo não existe na raiz.
+#
+# Portanto, todo Elemento de Requisito deve escrever primeiro
+# TODOS os campos escalares e array<string>, e só depois os
+# campos array<tabela>. Os campos abaixo estão listados nessa
+# ordem de propósito.
+#
+# O validador não consegue distinguir esse caso de um subcampo
+# genuinamente desconhecido — quando o parse termina, a informação
+# já se perdeu. Ver nota no fim do arquivo.
+# ============================================================
+
+
+# ------------------------------------------------------------
+# Campos comuns — escalares (Ator e CasoDeUso)
+# ------------------------------------------------------------
+
+[campos.id]
+obrigatorio = true
+tipo_dado = "string"
+alias.pt = "id"
+alias.en = "id"
+# Identificador estável do elemento. Unicidade e formato não são
+# verificáveis por este validador (não há visão do conjunto);
+# são responsabilidade da esteira que indexa o grafo.
+
+[campos.tipo]
+obrigatorio = true
+tipo_dado = "enum"
+alias.pt = "tipo"
+alias.en = "type"
+# Os canônicos "ator" e "caso_de_uso" estão acoplados ao código do
+# validador, que os usa para escolher entre [campos_ator] e
+# [campos_caso_de_uso]. Um terceiro tipo aqui não passa a valer
+# sozinho: gera aviso "tipo-sem-campos-especificos" e o elemento é
+# validado só contra os campos comuns.
+
+  [campos.tipo.valores.ator]
+  alias.pt = "ator"
+  alias.en = "actor"
+
+  [campos.tipo.valores.caso_de_uso]
+  alias.pt = "caso_de_uso"
+  alias.en = "use_case"
+
+[campos.nome]
+obrigatorio = true
+tipo_dado = "string"
+alias.pt = "nome"
+alias.en = "name"
+
+# [MOVIDO] Estava em [campos_caso_de_uso] no v1. Um Ator sem
+# descrição é tão opaco quanto um caso de uso sem descrição, e o
+# grafo fica com nós que só têm rótulo.
+[campos.descricao]
+obrigatorio = false
+tipo_dado = "string_markdown"
+alias.pt = "descricao"
+alias.en = "description"
+
+
+# ------------------------------------------------------------
+# Campos exclusivos de CasoDeUso — escalares e array<string>
+# ------------------------------------------------------------
+
+[campos_caso_de_uso.nivel]
+obrigatorio = false
+tipo_dado = "enum"
+alias.pt = "nivel"
+alias.en = "level"
+
+  [campos_caso_de_uso.nivel.valores.resumo]
+  alias.pt = "resumo"
+  alias.en = "summary"
+
+  [campos_caso_de_uso.nivel.valores.objetivo_usuario]
+  alias.pt = "objetivo_usuario"
+  alias.en = "user_goal"
+
+  [campos_caso_de_uso.nivel.valores.subfuncao]
+  alias.pt = "subfuncao"
+  alias.en = "subfunction"
+
+[campos_caso_de_uso.prioridade]
+obrigatorio = false
+tipo_dado = "enum"
+alias.pt = "prioridade"
+alias.en = "priority"
+
+  [campos_caso_de_uso.prioridade.valores.alta]
+  alias.pt = "alta"
+  alias.en = "high"
+
+  [campos_caso_de_uso.prioridade.valores.media]
+  alias.pt = "media"
+  alias.en = "medium"
+
+  [campos_caso_de_uso.prioridade.valores.baixa]
+  alias.pt = "baixa"
+  alias.en = "low"
+
+[campos_caso_de_uso.frequencia]
+obrigatorio = false
+tipo_dado = "string"
+alias.pt = "frequencia"
+alias.en = "frequency"
+
+[campos_caso_de_uso.gatilho]
+obrigatorio = false
+tipo_dado = "string"
+alias.pt = "gatilho"
+alias.en = "trigger"
+# Evento que dispara o caso de uso — distinto de pré-condição
+# (estado que já deve valer, não evento).
+
+[campos_caso_de_uso.pre_condicoes]
+obrigatorio = false
+tipo_dado = "array<string>"
+alias.pt = "pre_condicoes"
+alias.en = "preconditions"
+
+[campos_caso_de_uso.pos_condicoes]
+obrigatorio = false
+tipo_dado = "array<string>"
+alias.pt = "pos_condicoes"
+alias.en = "postconditions"
+# Garantia de sucesso: o que vale quando o caso de uso termina bem.
+
+[campos_caso_de_uso.garantia_minima]
+obrigatorio = false
+tipo_dado = "array<string>"
+alias.pt = "garantia_minima"
+alias.en = "minimal_guarantee"
+# O que vale mesmo quando o caso de uso falha. É o par de
+# pos_condicoes, não um subconjunto dela.
+
+[campos_caso_de_uso.requisitos_especiais]
+obrigatorio = false
+tipo_dado = "array<string>"
+alias.pt = "requisitos_especiais"
+alias.en = "special_requirements"
+
+[campos_caso_de_uso.questoes_em_aberto]
+obrigatorio = false
+tipo_dado = "array<string>"
+alias.pt = "questoes_em_aberto"
+alias.en = "open_issues"
+
+
+# ------------------------------------------------------------
+# Campos comuns — array<tabela>
+# ------------------------------------------------------------
+
+[campos.relacoes]
+obrigatorio = false
+tipo_dado = "array<tabela>"
+alias.pt = "relacoes"
+alias.en = "relations"
+
+  [campos.relacoes.subcampos.tipo]
+  obrigatorio = true
+  tipo_dado = "enum"
+  alias.pt = "tipo"
+  alias.en = "type"
+  # DIREÇÃO CANÔNICA — o schema não a expressa, então fica aqui e
+  # a esteira de indexação deve rejeitar o inverso:
+  #   incluir       : caso de uso base  -> caso de uso incluído
+  #   estender      : caso de uso que estende -> caso de uso base
+  #   generaliza    : elemento específico -> elemento geral
+  #   interage_com  : caso de uso -> ator
+  # Sem isso, a mesma aresta pode ser gravada dos dois lados e o
+  # grafo ganha duplicatas que nenhum validador de arquivo pega.
+
+    [campos.relacoes.subcampos.tipo.valores.include]
+    alias.pt = "incluir"
+    alias.en = "include"
+
+    [campos.relacoes.subcampos.tipo.valores.extend]
+    alias.pt = "estender"
+    alias.en = "extend"
+
+    [campos.relacoes.subcampos.tipo.valores.generaliza]
+    alias.pt = "generaliza"
+    alias.en = "generalizes"
+
+    [campos.relacoes.subcampos.tipo.valores.interage_com]
+    alias.pt = "interage_com"
+    alias.en = "interacts_with"
+
+  [campos.relacoes.subcampos.alvo]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "alvo"
+  alias.en = "target"
+
+  # [NOVO] Resolve a perda do "ator primário" sem criar um campo
+  # que duplique a aresta. Só faz sentido com tipo = interage_com;
+  # o validador não sabe expressar obrigatoriedade condicional, então
+  # o campo é opcional e a coerência fica com a esteira.
+  [campos.relacoes.subcampos.papel]
+  obrigatorio = false
+  tipo_dado = "enum"
+  alias.pt = "papel"
+  alias.en = "role"
+
+    [campos.relacoes.subcampos.papel.valores.primario]
+    alias.pt = "primario"
+    alias.en = "primary"
+
+    [campos.relacoes.subcampos.papel.valores.secundario]
+    alias.pt = "secundario"
+    alias.en = "secondary"
+
+
+# ------------------------------------------------------------
+# Campos exclusivos de CasoDeUso — array<tabela>
+# ------------------------------------------------------------
+
+# [QUEBRA] Era array<string> no v1. Com passos anônimos, a
+# numeração vive dentro da prosa ("3. O sistema...") e a âncora de
+# um fluxo alternativo ("no passo 3") é texto que nada verifica:
+# renumerar o fluxo principal quebra as referências em silêncio.
+# Custo da mudança: todo elemento existente precisa migrar.
+[campos_caso_de_uso.fluxo_principal]
+obrigatorio = true
+tipo_dado = "array<tabela>"
+alias.pt = "fluxo_principal"
+alias.en = "main_flow"
+
+  [campos_caso_de_uso.fluxo_principal.subcampos.passo]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "passo"
+  alias.en = "step"
+  # Rótulo estável do passo, único dentro do caso de uso. É o alvo
+  # de fluxos_alternativos.ancora.
+
+  [campos_caso_de_uso.fluxo_principal.subcampos.acao]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "acao"
+  alias.en = "action"
+
+[campos_caso_de_uso.fluxos_alternativos]
+obrigatorio = false
+tipo_dado = "array<tabela>"
+alias.pt = "fluxos_alternativos"
+alias.en = "alternative_flows"
+
+  # [NOVO] Sem identidade, um fluxo alternativo não pode ser
+  # referenciado por caso de teste, defeito ou outro elemento.
+  [campos_caso_de_uso.fluxos_alternativos.subcampos.id]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "id"
+  alias.en = "id"
+
+  # [NOVO] Rótulo do passo do fluxo principal onde a ramificação se
+  # enxerta. Ausente = pode ocorrer em qualquer passo.
+  [campos_caso_de_uso.fluxos_alternativos.subcampos.ancora]
+  obrigatorio = false
+  tipo_dado = "string"
+  alias.pt = "ancora"
+  alias.en = "anchor"
+
+  [campos_caso_de_uso.fluxos_alternativos.subcampos.condicao]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "condicao"
+  alias.en = "condition"
+
+  [campos_caso_de_uso.fluxos_alternativos.subcampos.passos]
+  obrigatorio = true
+  tipo_dado = "array<string>"
+  alias.pt = "passos"
+  alias.en = "steps"
+
+# [NOVO] Lacuna mais séria do v1: não havia onde registrar como se
+# verifica que o caso de uso foi atendido. Fica opcional de
+# propósito — exigir aqui impediria commitar rascunho, que é o que
+# questoes_em_aberto existe para permitir. "Aprovado exige
+# critério" é regra de promoção, não de forma do arquivo, e
+# pertence à esteira.
+[campos_caso_de_uso.criterios_aceitacao]
+obrigatorio = false
+tipo_dado = "array<tabela>"
+alias.pt = "criterios_aceitacao"
+alias.en = "acceptance_criteria"
+
+  [campos_caso_de_uso.criterios_aceitacao.subcampos.id]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "id"
+  alias.en = "id"
+
+  [campos_caso_de_uso.criterios_aceitacao.subcampos.dado]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "dado"
+  alias.en = "given"
+
+  [campos_caso_de_uso.criterios_aceitacao.subcampos.quando]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "quando"
+  alias.en = "when"
+
+  [campos_caso_de_uso.criterios_aceitacao.subcampos.entao]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "entao"
+  alias.en = "then"
+
+# [NOVO] Regra de negócio com identidade própria, para poder ser
+# citada por vários casos de uso. A forma final é provavelmente um
+# terceiro tipo de elemento no grafo — enquanto isso não existe,
+# fica embutida.
+[campos_caso_de_uso.regras_de_negocio]
+obrigatorio = false
+tipo_dado = "array<tabela>"
+alias.pt = "regras_de_negocio"
+alias.en = "business_rules"
+
+  [campos_caso_de_uso.regras_de_negocio.subcampos.id]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "id"
+  alias.en = "id"
+
+  [campos_caso_de_uso.regras_de_negocio.subcampos.enunciado]
+  obrigatorio = true
+  tipo_dado = "string_markdown"
+  alias.pt = "enunciado"
+  alias.en = "statement"
+
+
+# ------------------------------------------------------------
+# Campos exclusivos de Ator (tipo = ator)
+# ------------------------------------------------------------
+
+# [NOVO] O v1 deixava Ator com id, tipo, nome e relações apenas.
+# A distinção humano/sistema/temporizador muda o que se espera do
+# nó (o temporizador não tem interface, o sistema externo tem
+# contrato) e é barata de registrar.
+[campos_ator.classe]
+obrigatorio = false
+tipo_dado = "enum"
+alias.pt = "classe"
+alias.en = "class"
+
+  [campos_ator.classe.valores.humano]
+  alias.pt = "humano"
+  alias.en = "human"
+
+  [campos_ator.classe.valores.sistema]
+  alias.pt = "sistema"
+  alias.en = "system"
+
+  [campos_ator.classe.valores.temporizador]
+  alias.pt = "temporizador"
+  alias.en = "timer"
+
+  [campos_ator.classe.valores.organizacao]
+  alias.pt = "organizacao"
+  alias.en = "organization"
+
+
+# ============================================================
+# O que este schema continua NÃO conseguindo expressar
+# ============================================================
+# Registrado aqui para que a lacuna seja escolhida, não esquecida.
+#
+# - Integridade referencial: "alvo", "ancora" e os ids citados em
+#   prosa não são verificados contra nada. Só a esteira que monta
+#   o grafo tem visão para isso.
+# - Obrigatoriedade condicional: "papel" só faz sentido com
+#   tipo = interage_com; "criterios_aceitacao" deveria ser exigido
+#   na promoção a aprovado. Nada disso cabe no par
+#   (campo, obrigatorio).
+# - Unicidade: nem de "id" entre elementos, nem de "passo" dentro
+#   do fluxo principal.
+# - Cardinalidade: não há como exigir exatamente um ator com
+#   papel = primario.
+# - Formato: nenhum padrão para "id", nenhuma restrição sobre
+#   "frequencia", que hoje é prosa livre.
+# - Tipos primitivos: não há booleano nem numérico. "papel" e
+#   "classe" são enums por isso, não por escolha de modelagem.
+#
+# ============================================================
+# Nota para o validador (não é campo)
+# ============================================================
+# Quando um subcampo desconhecido tem exatamente o nome canônico
+# ou o alias de um campo de topo, a causa quase certa é a ordem
+# das chaves no arquivo (chave escrita depois de um [[array]]).
+# O diagnóstico útil não é "subcampo desconhecido", é apontar a
+# absorção. A informação necessária já está no schema carregado —
+# basta consultar o mapa de campos de topo antes de escolher a
+# mensagem.
+#
+# ============================================================
+# Referências (herdadas do v1)
+# ============================================================
+# - Cockburn, A. "Basic/Fully-Dressed Use Case Template"
+#   (Humans and Technology, TR96.03a).
+# - Material didático correlato citado no v1.
+#
+# Ainda deixado de fora, pelos motivos registrados no v1:
+# "stakeholders e interesses" (exige decidir se vira nó do grafo)
+# e "escopo" (redundante com a hierarquia Sistema/Subsistema).
