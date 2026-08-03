@@ -1,0 +1,68 @@
+schema_id = "elemento-requisito-v3;en_US"
+
+id = "01-user-login"
+type = "use_case"
+name = "User login"
+
+trigger = "User opens the home page and clicks 'Sign in'"
+priority = "high"
+level = "user_goal"
+frequency = "Several times a day, per user"
+
+description = """
+Lets the user authenticate using **e-mail and password**.
+"""
+
+preconditions = ["User has a registered account"]
+
+postconditions = ["User authenticated with an active session"]
+minimal_guarantee = ["No partial or inconsistent session is created on failure"]
+special_requirements = ["Response within 1 second for 95% of attempts"]
+open_issues = ["Decide the lockout policy after failed attempts"]
+
+[[main_flow]]
+step = "P1"
+action = "User enters e-mail and password"
+
+[[main_flow]]
+step = "P2"
+action = "System validates the credentials"
+
+[[main_flow]]
+step = "P3"
+action = "System redirects to the dashboard"
+
+[[alternative_flows]]
+id = "FA-01"
+anchor = "P2"
+condition = "Invalid credentials"
+steps = [
+  "System shows an error message",
+  "Returns to step P1 of the main flow",
+]
+
+# Deliberately unanchored: applies to the whole use case rather than to
+# one step. Cockburn's "*a" — and the reason `ancora` is optional.
+[[alternative_flows]]
+id = "FA-02"
+condition = "User leaves the page at any point"
+steps = ["System drops the attempt without creating a session"]
+
+[[business_rules]]
+id = "RN-01"
+statement = "Three consecutive failed attempts block further attempts for 15 minutes."
+
+[[acceptance_criteria]]
+id = "CA-01"
+given = "a registered, active account"
+when = "the user enters the correct e-mail and password"
+then = "the system creates the session and redirects to the dashboard"
+
+[[relations]]
+type = "include"
+target = "02-validate-credentials"
+
+[[relations]]
+type = "interacts_with"
+target = "ATOR-USUARIO"
+role = "primary"

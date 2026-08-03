@@ -1,0 +1,425 @@
+# ============================================================
+# Schema: elemento-requisito-v3
+# ============================================================
+# Define os campos válidos de um "Elemento de Requisito" (Ator ou
+# CasoDeUso) armazenado no git, com nomes de campo e valores de
+# enum localizados por idioma.
+#
+# BOOTSTRAP (fora deste schema, fixo, nunca localizado):
+#   schema_id = "<versao>;<locale>"
+#   - <versao>  : identifica este arquivo de schema (ex: "elemento-requisito-v3")
+#   - <locale>  : ex: "pt_BR". Só a parte antes do "_" é usada para
+#                 resolver aliases (idioma geral, não a região).
+#   - Se não houver ";" ou o locale vier vazio, idioma padrão = "en".
+#     "elemento-requisito-v3" e "elemento-requisito-v3;" são equivalentes.
+#
+# Depois de resolver schema_id -> (versao, idioma), o parser:
+#   1. Carrega este arquivo (correspondente à <versao>).
+#   2. Monta o mapa reverso de aliases (alias.<idioma> -> campo canônico)
+#      a partir de [campos.*] (comuns a Ator e CasoDeUso).
+#   3. Resolve o campo "tipo" primeiro (é sempre comum e obrigatório).
+#   4. Com "tipo" resolvido, soma ao mapa reverso os campos de
+#      [campos_caso_de_uso.*] ou [campos_ator.*], conforme o valor.
+#   5. Indexa as chaves declaradas no arquivo (ver "CHAVES E REFERÊNCIAS").
+#   6. Normaliza toda chave/valor do arquivo para a forma canônica.
+#   7. Rejeita qualquer chave do arquivo que não exista no mapa
+#      reverso do idioma declarado (erro de schema — não ignora
+#      silenciosamente, e não tenta reconhecer alias de outro idioma).
+#   8. Valida presença de todo campo com obrigatorio = true aplicável
+#      ao tipo do elemento.
+#
+# ------------------------------------------------------------
+# CHAVES E REFERÊNCIAS (novidade do v3)
+# ------------------------------------------------------------
+# Duas propriedades novas de campo, ambas interpretadas pelo validador:
+#
+#   chave = true
+#     Declarável em subcampo de um `array<tabela>`. Diz que aquele
+#     subcampo identifica o item dentro da coleção: os valores são
+#     indexados e precisam ser únicos e não vazios dentro do arquivo.
+#     Vale por si só — mesmo sem ninguém referenciar, ganha-se a
+#     detecção de identificador repetido.
+#
+#   tipo_dado = "referencia" + [<campo>.referencia]
+#     Campo cujo valor precisa constar entre as chaves já declaradas no
+#     próprio arquivo. O destino é escrito em nomes CANÔNICOS (nunca
+#     localizados), como as chaves de [<campo>.valores.*]:
+#
+#       [campos_caso_de_uso.fluxos_alternativos.subcampos.ancora.referencia]
+#       campo    = "fluxo_principal"
+#       subcampo = "passo"
+#
+# ESCOPO DA VERIFICAÇÃO: intra-arquivo. O reqMeshVal enxerga um arquivo
+# por vez, então só resolve referência cujo alvo esteja no mesmo arquivo.
+# É por isso que `relacoes.alvo` continua sendo "string" e não virou
+# "referencia": ele aponta para OUTRO Elemento de Requisito, e resolver
+# isso exige o projeto inteiro — trabalho da etapa de grafo, não deste
+# validador. Marcar `alvo` como referência aqui produziria "referência
+# não encontrada" em todo arquivo válido do repositório.
+#
+# ------------------------------------------------------------
+# MUDANÇAS EM RELAÇÃO AO v1
+# ------------------------------------------------------------
+# (Estrutura reconstruída a partir de fixtures/completo-pt.toml, que
+#  declara "elemento-requisito-v2" mas cujo arquivo de schema não
+#  acompanhava o projeto. Se o seu v2 real divergir, o ponto a conferir
+#  são os nomes canônicos — os aliases são ajustáveis sem tocar em código.)
+#
+# - fluxo_principal: era array<string> (passos soltos), agora é
+#   array<tabela> com `passo` (chave) + `acao`. É o que dá endereço
+#   estável a cada passo — sem isso não há a que ancorar.
+# - fluxos_alternativos: ganha `id` (chave própria) e `ancora`
+#   (referência para fluxo_principal.passo).
+# - regras_de_negocio e criterios_aceitacao: novas coleções, com `id`
+#   como chave — herdam de graça a checagem de unicidade.
+# - relacoes: ganha o subcampo opcional `papel`.
+# ============================================================
+
+# ------------------------------------------------------------
+# Campos comuns (Ator e CasoDeUso)
+# ------------------------------------------------------------
+
+[campos.id]
+obrigatorio = true
+tipo_dado = "string"
+alias.pt = "id"
+alias.en = "id"
+
+[campos.tipo]
+obrigatorio = true
+tipo_dado = "enum"
+alias.pt = "tipo"
+alias.en = "type"
+
+  [campos.tipo.valores.ator]
+  alias.pt = "ator"
+  alias.en = "actor"
+
+  [campos.tipo.valores.caso_de_uso]
+  alias.pt = "caso_de_uso"
+  alias.en = "use_case"
+
+[campos.nome]
+obrigatorio = true
+tipo_dado = "string"
+alias.pt = "nome"
+alias.en = "name"
+
+[campos.relacoes]
+obrigatorio = false
+tipo_dado = "array<tabela>"
+alias.pt = "relacoes"
+alias.en = "relations"
+
+  [campos.relacoes.subcampos.tipo]
+  obrigatorio = true
+  tipo_dado = "enum"
+  alias.pt = "tipo"
+  alias.en = "type"
+
+    [campos.relacoes.subcampos.tipo.valores.include]
+    alias.pt = "incluir"
+    alias.en = "include"
+
+    [campos.relacoes.subcampos.tipo.valores.extend]
+    alias.pt = "estender"
+    alias.en = "extend"
+
+    [campos.relacoes.subcampos.tipo.valores.generaliza]
+    alias.pt = "generaliza"
+    alias.en = "generalizes"
+
+    [campos.relacoes.subcampos.tipo.valores.interage_com]
+    alias.pt = "interage_com"
+    alias.en = "interacts_with"
+
+  # Aponta para outro Elemento de Requisito: fora do alcance de um
+  # validador que lê um arquivo por vez. Ver "ESCOPO DA VERIFICAÇÃO".
+  [campos.relacoes.subcampos.alvo]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "alvo"
+  alias.en = "target"
+
+  [campos.relacoes.subcampos.papel]
+  obrigatorio = false
+  tipo_dado = "enum"
+  alias.pt = "papel"
+  alias.en = "role"
+  # Faz sentido só em relações com Ator (interage_com); o validador não
+  # cruza subcampos entre si, então isso fica como convenção de escrita.
+
+    [campos.relacoes.subcampos.papel.valores.primario]
+    alias.pt = "primario"
+    alias.en = "primary"
+
+    [campos.relacoes.subcampos.papel.valores.secundario]
+    alias.pt = "secundario"
+    alias.en = "secondary"
+
+# ------------------------------------------------------------
+# Campos exclusivos de CasoDeUso (tipo = caso_de_uso)
+# ------------------------------------------------------------
+
+[campos_caso_de_uso.descricao]
+obrigatorio = false
+tipo_dado = "string_markdown"
+alias.pt = "descricao"
+alias.en = "description"
+
+[campos_caso_de_uso.pre_condicoes]
+obrigatorio = false
+tipo_dado = "array<string>"
+alias.pt = "pre_condicoes"
+alias.en = "preconditions"
+
+# --- fluxo principal: passos identificados ---
+# A quebra em relação ao v1 (array<string> -> array<tabela>) é o preço
+# de ter endereço para cada passo. Um arquivo v1 validado contra este
+# schema acusa "esperado lista de tabelas" em fluxo_principal, o que é
+# exatamente o aviso de migração que se quer.
+
+[campos_caso_de_uso.fluxo_principal]
+obrigatorio = true
+tipo_dado = "array<tabela>"
+alias.pt = "fluxo_principal"
+alias.en = "main_flow"
+
+  # Identificador do passo dentro do caso de uso. É o alvo da âncora.
+  # Deliberadamente uma string livre ("P1", "3", "passo-3"): a numeração
+  # é convenção de projeto, e amarrá-la aqui obrigaria a renumerar
+  # arquivos inteiros a cada passo inserido no meio.
+  [campos_caso_de_uso.fluxo_principal.subcampos.passo]
+  obrigatorio = true
+  tipo_dado = "string"
+  chave = true
+  alias.pt = "passo"
+  alias.en = "step"
+
+  [campos_caso_de_uso.fluxo_principal.subcampos.acao]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "acao"
+  alias.en = "action"
+
+[campos_caso_de_uso.fluxos_alternativos]
+obrigatorio = false
+tipo_dado = "array<tabela>"
+alias.pt = "fluxos_alternativos"
+alias.en = "alternative_flows"
+
+  [campos_caso_de_uso.fluxos_alternativos.subcampos.id]
+  obrigatorio = true
+  tipo_dado = "string"
+  chave = true
+  alias.pt = "id"
+  alias.en = "id"
+
+  # A "chave estrangeira": precisa casar com algum fluxo_principal.passo
+  # declarado NESTE arquivo.
+  #
+  # obrigatorio = false por um motivo concreto, não por indecisão: o
+  # fluxo alternativo global ("a qualquer momento o cliente pode
+  # cancelar" — o "*a" de Cockburn) não se prende a passo nenhum, e
+  # FA-05 de completo-pt.toml é justamente um desses. Exigir âncora
+  # forçaria a inventar uma. Ausente = vale para o caso de uso inteiro.
+  # Para tornar obrigatória, basta trocar para true — o validador não
+  # muda.
+  [campos_caso_de_uso.fluxos_alternativos.subcampos.ancora]
+  obrigatorio = false
+  tipo_dado = "referencia"
+  alias.pt = "ancora"
+  alias.en = "anchor"
+
+    [campos_caso_de_uso.fluxos_alternativos.subcampos.ancora.referencia]
+    campo = "fluxo_principal"
+    subcampo = "passo"
+
+  [campos_caso_de_uso.fluxos_alternativos.subcampos.condicao]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "condicao"
+  alias.en = "condition"
+
+  [campos_caso_de_uso.fluxos_alternativos.subcampos.passos]
+  obrigatorio = true
+  tipo_dado = "array<string>"
+  alias.pt = "passos"
+  alias.en = "steps"
+  # Os passos do fluxo alternativo continuam texto solto: dar id a eles
+  # só se paga quando algo precisar ancorar aqui dentro (alternativa de
+  # alternativa). Quando aparecer, é a mesma receita: `chave = true` no
+  # subcampo e uma referência apontando para ele.
+
+[campos_caso_de_uso.regras_de_negocio]
+obrigatorio = false
+tipo_dado = "array<tabela>"
+alias.pt = "regras_de_negocio"
+alias.en = "business_rules"
+
+  [campos_caso_de_uso.regras_de_negocio.subcampos.id]
+  obrigatorio = true
+  tipo_dado = "string"
+  chave = true
+  alias.pt = "id"
+  alias.en = "id"
+
+  [campos_caso_de_uso.regras_de_negocio.subcampos.enunciado]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "enunciado"
+  alias.en = "statement"
+
+[campos_caso_de_uso.criterios_aceitacao]
+obrigatorio = false
+tipo_dado = "array<tabela>"
+alias.pt = "criterios_aceitacao"
+alias.en = "acceptance_criteria"
+
+  [campos_caso_de_uso.criterios_aceitacao.subcampos.id]
+  obrigatorio = true
+  tipo_dado = "string"
+  chave = true
+  alias.pt = "id"
+  alias.en = "id"
+
+  [campos_caso_de_uso.criterios_aceitacao.subcampos.dado]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "dado"
+  alias.en = "given"
+
+  [campos_caso_de_uso.criterios_aceitacao.subcampos.quando]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "quando"
+  alias.en = "when"
+
+  [campos_caso_de_uso.criterios_aceitacao.subcampos.entao]
+  obrigatorio = true
+  tipo_dado = "string"
+  alias.pt = "entao"
+  alias.en = "then"
+
+[campos_caso_de_uso.pos_condicoes]
+obrigatorio = false
+tipo_dado = "array<string>"
+alias.pt = "pos_condicoes"
+alias.en = "postconditions"
+
+# --- Campos vindos da revisão de literatura (inalterados desde o v1) ---
+# (template "fully-dressed" de Cockburn e variações amplamente
+# citadas na área de Engenharia de Requisitos; ver nota ao fim
+# do arquivo com as referências consultadas)
+
+[campos_caso_de_uso.gatilho]
+obrigatorio = false
+tipo_dado = "string"
+alias.pt = "gatilho"
+alias.en = "trigger"
+# Evento que dispara o caso de uso — distinto de pré-condição
+# (que é um estado que já deve valer, não um evento).
+
+[campos_caso_de_uso.prioridade]
+obrigatorio = false
+tipo_dado = "enum"
+alias.pt = "prioridade"
+alias.en = "priority"
+
+  [campos_caso_de_uso.prioridade.valores.alta]
+  alias.pt = "alta"
+  alias.en = "high"
+
+  [campos_caso_de_uso.prioridade.valores.media]
+  alias.pt = "media"
+  alias.en = "medium"
+
+  [campos_caso_de_uso.prioridade.valores.baixa]
+  alias.pt = "baixa"
+  alias.en = "low"
+
+[campos_caso_de_uso.nivel]
+obrigatorio = false
+tipo_dado = "enum"
+alias.pt = "nivel"
+alias.en = "level"
+# Granularidade do objetivo (Cockburn): resumo (vários casos de uso
+# encadeados), objetivo do usuário (o "grão" padrão) ou subfunção
+# (passo interno reaproveitado por outros casos de uso).
+
+  [campos_caso_de_uso.nivel.valores.resumo]
+  alias.pt = "resumo"
+  alias.en = "summary"
+
+  [campos_caso_de_uso.nivel.valores.objetivo_usuario]
+  alias.pt = "objetivo_usuario"
+  alias.en = "user_goal"
+
+  [campos_caso_de_uso.nivel.valores.subfuncao]
+  alias.pt = "subfuncao"
+  alias.en = "subfunction"
+
+[campos_caso_de_uso.frequencia]
+obrigatorio = false
+tipo_dado = "string"
+alias.pt = "frequencia"
+alias.en = "frequency"
+# Frequência de ocorrência esperada — relevante para dimensionamento
+# e para priorizar testes/performance.
+
+[campos_caso_de_uso.requisitos_especiais]
+obrigatorio = false
+tipo_dado = "array<string>"
+alias.pt = "requisitos_especiais"
+alias.en = "special_requirements"
+# Requisitos não-funcionais específicos deste caso de uso
+# (performance, usabilidade, restrições de interface etc.).
+
+[campos_caso_de_uso.garantia_minima]
+obrigatorio = false
+tipo_dado = "array<string>"
+alias.pt = "garantia_minima"
+alias.en = "minimal_guarantee"
+# Distinção de Cockburn: o que deve valer mesmo se o caso de uso
+# falhar (ex: nenhuma transação parcial). "pos_condicoes" acima
+# corresponde à garantia de sucesso (o que vale quando dá certo).
+
+[campos_caso_de_uso.questoes_em_aberto]
+obrigatorio = false
+tipo_dado = "array<string>"
+alias.pt = "questoes_em_aberto"
+alias.en = "open_issues"
+# Pontos ainda não decididos sobre o caso de uso — útil durante
+# elaboração incremental, permite commitar um rascunho incompleto
+# sem fingir que está fechado.
+
+# ------------------------------------------------------------
+# Campos exclusivos de Ator (tipo = ator)
+# ------------------------------------------------------------
+# Nenhum por enquanto — template de Ator foi deixado de fora.
+
+# ------------------------------------------------------------
+# Referências consultadas (revisão de literatura)
+# ------------------------------------------------------------
+# - Cockburn, A. "Basic/Fully-Dressed Use Case Template" (Humans
+#   and Technology, TR96.03a) — origem de: gatilho, prioridade,
+#   nível, frequência, requisitos especiais, garantia mínima vs.
+#   garantia de sucesso, questões em aberto; e da numeração de passos
+#   com extensões ancoradas ("3a", "3b"), que é o que `ancora`
+#   formaliza aqui.
+# - Material didático correlato (ex.: CMSC 345, Univ. Maryland;
+#   Fondue/UCM4IoT) confirma o mesmo núcleo de campos como
+#   convenção estabelecida na área, com variações menores de
+#   nomenclatura entre autores.
+#
+# Campos considerados e DEIXADOS DE FORA por ora (avaliar depois
+# se fizerem falta):
+# - "stakeholders e interesses": Cockburn trata stakeholder como
+#   categoria mais ampla que Ator (nem todo stakeholder interage
+#   com o sistema). Modelar isso bem exigiria decidir se vira um
+#   novo tipo de nó no grafo ou fica só como texto — não é uma
+#   extensão trivial do schema atual, então preferi levantar a
+#   necessidade em vez de decidir sozinho.
+# - "escopo" (scope: caixa-preta vs. componente): parece redundante
+#   com a hierarquia Sistema/Subsistema/Funcionalidade que vocês
+#   já têm no banco auxiliar.

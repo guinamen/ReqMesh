@@ -1,0 +1,58 @@
+# Fixture proposital de arquivo INVÁLIDO — exercita os caminhos de erro
+# que o v3 acrescenta (chaves e referências). Os defeitos de campo já
+# cobertos por exemplo-invalido.toml não se repetem aqui: este arquivo
+# está certo em tudo o mais, para que cada diagnóstico seja atribuível.
+#
+# Problemas embutidos:
+#   1. fluxo_principal declara "P2" duas vezes (chave duplicada)
+#   2. fluxo_principal tem um passo com chave vazia
+#   3. FA-01 ancora em "P9", que não existe no fluxo principal
+#   4. FA-02 e FA-03 usam o mesmo id (chave duplicada em outra coleção)
+#
+# E, de propósito, NÃO é problema:
+#   - FA-04 sem âncora (fluxo alternativo global)
+
+schema_id = "elemento-requisito-v3;pt_BR"
+
+id = "99-referencias-quebradas"
+tipo = "caso_de_uso"
+nome = "Exemplo com referências quebradas"
+
+[[fluxo_principal]]
+passo = "P1"
+acao = "Usuário informa e-mail e senha"
+
+[[fluxo_principal]]
+passo = "P2"
+acao = "Sistema valida credenciais"
+
+[[fluxo_principal]]
+passo = "P2"
+acao = "Passo com identificador repetido"
+
+[[fluxo_principal]]
+passo = ""
+acao = "Passo sem identificador"
+
+[[fluxos_alternativos]]
+id = "FA-01"
+ancora = "P9"
+condicao = "Âncora aponta para um passo inexistente"
+passos = ["Sistema exibe mensagem de erro"]
+
+[[fluxos_alternativos]]
+id = "FA-02"
+ancora = "P1"
+condicao = "Primeira ocorrência do id"
+passos = ["Sistema encerra a tentativa"]
+
+[[fluxos_alternativos]]
+id = "FA-02"
+ancora = "P2"
+condicao = "Id repetido em relação ao anterior"
+passos = ["Sistema encerra a tentativa"]
+
+[[fluxos_alternativos]]
+id = "FA-04"
+condicao = "Fluxo global, sem âncora — isto é válido"
+passos = ["Sistema descarta a tentativa"]

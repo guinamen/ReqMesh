@@ -128,6 +128,19 @@ subcampo-obrigatorio-ausente = "required subfield missing (canonical: '{canonico
 tipo-dado-desconhecido = "schema declares unknown tipo_dado '{tipo_dado}' — field not checked"
 sem-subcampos = "schema defines no subfields for this table — contents not checked"
 
+chave-vazia = "key field cannot be empty — it is what identifies the item"
+# {valor} {anterior}
+chave-duplicada = "duplicate key value '{valor}'; already used at '{anterior}'"
+
+# {valor} {destino} {disponiveis}
+referencia-nao-encontrada = "'{valor}' matches no '{destino}' declared in this file (declared: {disponiveis})"
+# {destino}
+referencia-sem-alvos = "reference to '{destino}', but the file declares none"
+# {campo}
+referencia-sem-destino = "schema declares '{campo}' as a reference without saying to what — field not checked"
+# {campo} {destino}
+referencia-destino-invalido = "schema points '{campo}' at '{destino}', which is not a key of any collection — field not checked"
+
 # {alias} {idioma} {anterior} {atual}
 alias-ambiguo = "alias '{alias}' ({idioma}) is ambiguous: maps to both '{anterior}' and '{atual}'"
 # {canonico} {idioma}

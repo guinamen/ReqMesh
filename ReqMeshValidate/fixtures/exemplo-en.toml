@@ -1,38 +1,38 @@
-schema_id = "elemento-requisito-v1;pt_BR"
+schema_id = "elemento-requisito-v1;en_US"
 
-id = "01-login-usuario"
-tipo = "caso_de_uso"
-nome = "Login do usuário"
+id = "01-user-login"
+type = "use_case"
+name = "User login"
 
-gatilho = "Usuário acessa a página inicial e clica em 'Entrar'"
-prioridade = "alta"
-nivel = "objetivo_usuario"
-frequencia = "Múltiplas vezes por dia, por usuário"
+trigger = "User opens the home page and clicks 'Sign in'"
+priority = "high"
+level = "user_goal"
+frequency = "Several times a day, per user"
 
-descricao = """
-Permite que o usuário autentique-se no sistema usando **e-mail e senha**.
+description = """
+Lets the user authenticate using **e-mail and password**.
 """
 
-pre_condicoes = ["Usuário possui conta cadastrada"]
+preconditions = ["User has a registered account"]
 
-fluxo_principal = [
-  "Usuário informa e-mail e senha",
-  "Sistema valida credenciais",
-  "Sistema redireciona para o painel",
+main_flow = [
+  "User enters e-mail and password",
+  "System validates the credentials",
+  "System redirects to the dashboard",
 ]
 
-pos_condicoes = ["Usuário autenticado com sessão ativa"]
-garantia_minima = ["Nenhuma sessão parcial ou inconsistente é criada em caso de falha"]
-requisitos_especiais = ["Resposta em até 1 segundo em 95% das tentativas"]
-questoes_em_aberto = ["Definir política de bloqueio após tentativas malsucedidas"]
+postconditions = ["User authenticated with an active session"]
+minimal_guarantee = ["No partial or inconsistent session is created on failure"]
+special_requirements = ["Response within 1 second for 95% of attempts"]
+open_issues = ["Decide the lockout policy after failed attempts"]
 
-[[fluxos_alternativos]]
-condicao = "Credenciais inválidas"
-passos = [
-  "Sistema exibe mensagem de erro",
-  "Retorna ao passo 1 do fluxo principal",
+[[alternative_flows]]
+condition = "Invalid credentials"
+steps = [
+  "System shows an error message",
+  "Returns to step 1 of the main flow",
 ]
 
-[[relacoes]]
-tipo = "incluir"
-alvo = "02-validar-credenciais"
+[[relations]]
+type = "include"
+target = "02-validate-credentials"

@@ -43,6 +43,12 @@ const CAMPO_SCHEMA_ID: &str = "schema_id";
 const IDIOMA_PADRAO_CONTEUDO: &str = "en";
 /// Nome canônico do campo discriminador de tipo do elemento.
 const CAMPO_TIPO: &str = "tipo";
+/// `tipo_dado` das coleções — único nível em que existem subcampos e,
+/// portanto, o único que pode declarar chave.
+const TIPO_ARRAY_TABELA: &str = "array<tabela>";
+/// `tipo_dado` de um campo cujo valor precisa casar com uma chave
+/// declarada em outra coleção do mesmo arquivo.
+const TIPO_REFERENCIA: &str = "referencia";
 /// Idioma usado como fallback quando falta chave ou catálogo.
 pub const FALLBACK: &str = "en";
 
@@ -280,12 +286,36 @@ struct DefCampo {
     /// só para tipo_dado = "array<tabela>"
     #[serde(default)]
     subcampos: BTreeMap<String, DefCampo>,
+    /// Subcampo que identifica o item na coleção: valores indexados,
+    /// obrigatoriamente únicos e não vazios dentro do arquivo. Vale
+    /// sozinho (detecta id repetido) e é o que uma referência pode mirar.
+    #[serde(default)]
+    chave: bool,
+    /// Destino de um campo `tipo_dado = "referencia"`.
+    #[serde(default)]
+    referencia: Option<DefReferencia>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct DefValor {
     #[serde(default)]
     alias: BTreeMap<String, String>,
+}
+
+/// Para onde um campo de referência aponta. Escrito em nomes canônicos,
+/// como as chaves de `valores`: é fiação interna do schema, não texto de
+/// autor, então não se localiza.
+#[derive(Debug, Clone, Deserialize)]
+struct DefReferencia {
+    campo: String,
+    subcampo: String,
+}
+
+impl DefReferencia {
+    /// Forma usada como chave do índice e nas mensagens.
+    fn destino(&self) -> String {
+        format!("{}.{}", self.campo, self.subcampo)
+    }
 }
 
 // ============================================================
@@ -384,6 +414,26 @@ pub enum Msg {
     SemAliasNoIdioma {
         canonico: String,
         idioma: String,
+    },
+    ChaveVazia,
+    ChaveDuplicada {
+        valor: String,
+        anterior: String,
+    },
+    ReferenciaNaoEncontrada {
+        valor: String,
+        destino: String,
+        disponiveis: Vec<String>,
+    },
+    ReferenciaSemAlvos {
+        destino: String,
+    },
+    /// Defeito do schema: referência declarada sem a tabela de destino.
+    ReferenciaSemDestino(String),
+    /// Defeito do schema: o destino existe mas não é uma chave.
+    ReferenciaDestinoInvalido {
+        campo_referente: String,
+        destino: String,
     },
 }
 
@@ -506,6 +556,40 @@ impl Msg {
             Msg::SemAliasNoIdioma { canonico, idioma } => (
                 "sem-alias-no-idioma",
                 vec![("canonico", canonico.clone()), ("idioma", idioma.clone())],
+            ),
+            Msg::ChaveVazia => ("chave-vazia", vec![]),
+            Msg::ChaveDuplicada { valor, anterior } => (
+                "chave-duplicada",
+                vec![("valor", valor.clone()), ("anterior", anterior.clone())],
+            ),
+            Msg::ReferenciaNaoEncontrada {
+                valor,
+                destino,
+                disponiveis,
+            } => (
+                "referencia-nao-encontrada",
+                vec![
+                    ("valor", valor.clone()),
+                    ("destino", destino.clone()),
+                    ("disponiveis", disponiveis.join(", ")),
+                ],
+            ),
+            Msg::ReferenciaSemAlvos { destino } => (
+                "referencia-sem-alvos",
+                vec![("destino", destino.clone())],
+            ),
+            Msg::ReferenciaSemDestino(c) => {
+                ("referencia-sem-destino", vec![("campo", c.clone())])
+            }
+            Msg::ReferenciaDestinoInvalido {
+                campo_referente,
+                destino,
+            } => (
+                "referencia-destino-invalido",
+                vec![
+                    ("campo", campo_referente.clone()),
+                    ("destino", destino.clone()),
+                ],
             ),
         }
     }
@@ -1108,23 +1192,184 @@ pub fn validar_arquivo(schema: &Schema, versao_esperada: &str, caminho: &Path) -
         )),
     }
 
-    // --- 4. percorre as chaves do arquivo e cobra os obrigatórios ---
-    let (reconhecidos, _vistos) = validar_campos(
-        &campos,
-        tabela,
-        &idioma,
-        "",
-        false,
-        &mut rel.diagnosticos,
-    );
+    // --- 4. indexa as chaves declaradas no arquivo ---
+    // Antes da validação de propósito: uma referência pode aparecer no
+    // arquivo antes da coleção que ela aponta.
+    let indice = indexar_chaves(&campos, tabela, &idioma, &mut rel.diagnosticos);
+    let ctx = Ctx {
+        idioma: &idioma,
+        indice: &indice,
+    };
+
+    // --- 5. percorre as chaves do arquivo e cobra os obrigatórios ---
+    let (reconhecidos, _vistos) =
+        validar_campos(&campos, tabela, &ctx, "", false, &mut rel.diagnosticos);
     rel.campos_reconhecidos = reconhecidos;
 
     rel
 }
 
 // ============================================================
+// Chaves e referências
+// ============================================================
+
+/// Valores de chave declarados pelo arquivo, agrupados por destino
+/// canônico (`"<campo>.<subcampo>"`), com o local onde cada um apareceu.
+///
+/// Todo destino que o schema marca com `chave = true` entra aqui, mesmo
+/// que o arquivo não declare valor nenhum. É essa entrada vazia que
+/// separa dois casos que de fora se pareceriam: "a coleção existe e está
+/// vazia" (defeito do arquivo) e "o schema aponta para algo que não é
+/// chave" (defeito do schema).
+#[derive(Debug, Default)]
+pub struct IndiceChaves {
+    destinos: BTreeMap<String, BTreeMap<String, String>>,
+}
+
+impl IndiceChaves {
+    fn valores(&self, destino: &str) -> Option<&BTreeMap<String, String>> {
+        self.destinos.get(destino)
+    }
+}
+
+/// Passagem prévia sobre o arquivo: coleta os valores de todo subcampo
+/// com `chave = true` e acusa vazio e duplicata.
+///
+/// Precisa vir antes da validação porque uma referência pode aparecer
+/// antes, na ordem do arquivo, da coleção que ela aponta — e porque
+/// exigir ordem seria uma regra de escrita sem razão de ser.
+///
+/// Só enxerga o que consegue interpretar: item que não é tabela, chave
+/// ausente ou com tipo errado é ignorado aqui e cobrado na validação
+/// normal, para o mesmo defeito não render dois diagnósticos.
+fn indexar_chaves(
+    campos: &BTreeMap<String, DefCampo>,
+    tabela: &toml::value::Table,
+    idioma: &str,
+    diags: &mut Vec<Diagnostico>,
+) -> IndiceChaves {
+    let mut indice = IndiceChaves::default();
+
+    for (canonico, def) in campos {
+        if def.tipo_dado != TIPO_ARRAY_TABELA {
+            continue;
+        }
+        // Sem alias no idioma o campo sequer é utilizável no arquivo;
+        // montar_reverso já avisa, então aqui é só seguir adiante.
+        let Some(alias_campo) = def.alias.get(idioma) else {
+            continue;
+        };
+
+        for (sub_canonico, sub_def) in &def.subcampos {
+            if !sub_def.chave {
+                continue;
+            }
+
+            let valores = indice
+                .destinos
+                .entry(format!("{canonico}.{sub_canonico}"))
+                .or_default();
+
+            let (Some(alias_sub), Some(itens)) = (
+                sub_def.alias.get(idioma),
+                tabela.get(alias_campo).and_then(|v| v.as_array()),
+            ) else {
+                continue;
+            };
+
+            for (i, item) in itens.iter().enumerate() {
+                let Some(t) = item.as_table() else { continue };
+                let Some(Value::String(bruto)) = t.get(alias_sub) else {
+                    continue;
+                };
+
+                let local = format!("{alias_campo}[{i}].{alias_sub}");
+
+                if bruto.trim().is_empty() {
+                    diags.push(Diagnostico::erro(campo(local), Msg::ChaveVazia));
+                    continue;
+                }
+
+                match valores.get(bruto) {
+                    Some(anterior) => diags.push(Diagnostico::erro(
+                        campo(local),
+                        Msg::ChaveDuplicada {
+                            valor: bruto.clone(),
+                            anterior: anterior.clone(),
+                        },
+                    )),
+                    None => {
+                        valores.insert(bruto.clone(), local);
+                    }
+                }
+            }
+        }
+    }
+
+    indice
+}
+
+/// Uma referência vale quando o valor escrito consta entre as chaves que
+/// o próprio arquivo declarou no destino apontado pelo schema.
+///
+/// A checagem é intra-arquivo por construção: o validador recebe um
+/// arquivo por vez. Referência entre arquivos (como `relacoes.alvo`)
+/// pertence à etapa que enxerga o projeto inteiro.
+fn validar_referencia(
+    def: &DefCampo,
+    valor: &str,
+    ctx: &Ctx,
+    local: &str,
+    diags: &mut Vec<Diagnostico>,
+) {
+    let Some(ref_def) = &def.referencia else {
+        diags.push(Diagnostico::aviso(
+            Local::Schema,
+            Msg::ReferenciaSemDestino(local.to_string()),
+        ));
+        return;
+    };
+
+    let destino = ref_def.destino();
+
+    match ctx.indice.valores(&destino) {
+        // O schema aponta para algo que não é chave de coleção nenhuma.
+        // Culpa do schema: vira aviso e não reprova o arquivo, que não
+        // tem como estar certo nem errado a respeito.
+        None => diags.push(Diagnostico::aviso(
+            Local::Schema,
+            Msg::ReferenciaDestinoInvalido {
+                campo_referente: local.to_string(),
+                destino,
+            },
+        )),
+        Some(valores) if valores.is_empty() => diags.push(Diagnostico::erro(
+            campo(local),
+            Msg::ReferenciaSemAlvos { destino },
+        )),
+        Some(valores) if valores.contains_key(valor) => {}
+        Some(valores) => diags.push(Diagnostico::erro(
+            campo(local),
+            Msg::ReferenciaNaoEncontrada {
+                valor: valor.to_string(),
+                destino,
+                disponiveis: valores.keys().cloned().collect(),
+            },
+        )),
+    }
+}
+
+// ============================================================
 // Validação de valores
 // ============================================================
+
+/// O que a validação de um valor precisa saber além do valor: o idioma
+/// declarado pelo arquivo e as chaves já coletadas. Anda junto porque a
+/// recursão raiz → subtabela repassa os dois sem alterar nenhum.
+struct Ctx<'a> {
+    idioma: &'a str,
+    indice: &'a IndiceChaves,
+}
 
 /// Núcleo compartilhado entre a raiz do arquivo e as subtabelas: resolver
 /// alias, acusar campo desconhecido ou de outro idioma, validar cada valor
@@ -1138,11 +1383,12 @@ pub fn validar_arquivo(schema: &Schema, versao_esperada: &str, caminho: &Path) -
 fn validar_campos(
     campos: &BTreeMap<String, DefCampo>,
     tabela: &toml::value::Table,
-    idioma: &str,
+    ctx: &Ctx,
     prefixo_local: &str,
     subcampo: bool,
     diags: &mut Vec<Diagnostico>,
 ) -> (usize, BTreeSet<String>) {
+    let idioma = ctx.idioma;
     let reverso = montar_reverso(campos, idioma, diags);
     let global = montar_global(campos);
 
@@ -1163,7 +1409,7 @@ fn validar_campos(
                 vistos.insert(canonico.clone());
                 reconhecidos += 1;
                 if let Some(def) = campos.get(canonico) {
-                    validar_valor(def, valor, idioma, &local, diags);
+                    validar_valor(def, valor, ctx, &local, diags);
                 }
             }
             None => {
@@ -1207,10 +1453,11 @@ fn validar_campos(
 fn validar_valor(
     def: &DefCampo,
     valor: &Value,
-    idioma: &str,
+    ctx: &Ctx,
     local: &str,
     diags: &mut Vec<Diagnostico>,
 ) {
+    let idioma = ctx.idioma;
     match def.tipo_dado.as_str() {
         "string" | "string_markdown" => {
             if valor.as_str().is_none() {
@@ -1256,7 +1503,17 @@ fn validar_valor(
             }
         },
 
-        "array<tabela>" => match valor.as_array() {
+        // Referência: o tipo é texto, mas o valor precisa existir como
+        // chave em outra coleção do arquivo.
+        TIPO_REFERENCIA => match valor.as_str() {
+            None => diags.push(Diagnostico::erro(
+                campo(local),
+                Msg::EsperadoTexto(valor.type_str().to_string()),
+            )),
+            Some(s) => validar_referencia(def, s, ctx, local, diags),
+        },
+
+        TIPO_ARRAY_TABELA => match valor.as_array() {
             None => diags.push(Diagnostico::erro(
                 campo(local),
                 Msg::EsperadoListaTabelas(valor.type_str().to_string()),
@@ -1272,7 +1529,7 @@ fn validar_valor(
                             campo(local_i),
                             Msg::EsperadoTabela(item.type_str().to_string()),
                         )),
-                        Some(t) => validar_subtabela(&def.subcampos, t, idioma, &local_i, diags),
+                        Some(t) => validar_subtabela(&def.subcampos, t, ctx, &local_i, diags),
                     }
                 }
             }
@@ -1288,7 +1545,7 @@ fn validar_valor(
 fn validar_subtabela(
     subcampos: &BTreeMap<String, DefCampo>,
     tabela: &toml::value::Table,
-    idioma: &str,
+    ctx: &Ctx,
     local: &str,
     diags: &mut Vec<Diagnostico>,
 ) {
@@ -1299,7 +1556,7 @@ fn validar_subtabela(
         return;
     }
 
-    validar_campos(subcampos, tabela, idioma, local, true, diags);
+    validar_campos(subcampos, tabela, ctx, local, true, diags);
 }
 
 // ============================================================
@@ -1538,6 +1795,22 @@ mod testes {
             Msg::SemAliasNoIdioma {
                 canonico: s(),
                 idioma: s(),
+            },
+            Msg::ChaveVazia,
+            Msg::ChaveDuplicada {
+                valor: s(),
+                anterior: s(),
+            },
+            Msg::ReferenciaNaoEncontrada {
+                valor: s(),
+                destino: s(),
+                disponiveis: vec![s()],
+            },
+            Msg::ReferenciaSemAlvos { destino: s() },
+            Msg::ReferenciaSemDestino(s()),
+            Msg::ReferenciaDestinoInvalido {
+                campo_referente: s(),
+                destino: s(),
             },
         ]
     }
@@ -1960,8 +2233,14 @@ mod testes {
         let tabela: toml::value::Table =
             toml::from_str("conhecido = \"ok\"\ndesconhecido = \"x\"\n").unwrap();
 
+        let vazio = IndiceChaves::default();
+        let ctx = Ctx {
+            idioma: "pt",
+            indice: &vazio,
+        };
+
         let mut raiz = Vec::new();
-        let (reconhecidos, vistos) = validar_campos(&campos, &tabela, "pt", "", false, &mut raiz);
+        let (reconhecidos, vistos) = validar_campos(&campos, &tabela, &ctx, "", false, &mut raiz);
         assert_eq!(reconhecidos, 1);
         assert!(vistos.contains("conhecido"));
         assert_eq!(
@@ -1971,12 +2250,198 @@ mod testes {
         assert!(matches!(&raiz[0].local, Local::Campo(c) if c == "desconhecido"));
 
         let mut sub = Vec::new();
-        validar_campos(&campos, &tabela, "pt", "relacoes[0]", true, &mut sub);
+        validar_campos(&campos, &tabela, &ctx, "relacoes[0]", true, &mut sub);
         assert_eq!(
             sub.iter().map(|d| d.msg.chave_e_args().0).collect::<Vec<_>>(),
             vec!["subcampo-desconhecido"]
         );
         assert!(matches!(&sub[0].local, Local::Campo(c) if c == "relacoes[0].desconhecido"));
+    }
+
+    // --- chaves e referências (v3) ---------------------------------
+
+    fn schema_v3() -> Schema {
+        carregar_schema(&fixture("elemento-requisito-v3.toml"))
+            .expect("fixture do schema v3 não carrega")
+            .0
+    }
+
+    fn campos_caso_de_uso_v3(schema: &Schema) -> BTreeMap<String, DefCampo> {
+        let mut campos = schema.campos.clone();
+        campos.extend(schema.campos_caso_de_uso.clone());
+        campos
+    }
+
+    #[test]
+    fn exemplos_v3_validos_passam_nos_dois_idiomas() {
+        let schema = schema_v3();
+        for nome in ["exemplo-v3-pt.toml", "exemplo-v3-en.toml"] {
+            let rel = validar_arquivo(&schema, "elemento-requisito-v3", &fixture(nome));
+            assert!(
+                rel.valido(),
+                "{nome} deveria passar; erros: {:?}",
+                rel.chaves()
+            );
+        }
+    }
+
+    #[test]
+    fn fixture_v3_invalida_reporta_cada_defeito_de_chave_e_referencia() {
+        let schema = schema_v3();
+        let rel = validar_arquivo(
+            &schema,
+            "elemento-requisito-v3",
+            &fixture("exemplo-v3-invalido.toml"),
+        );
+        assert!(!rel.valido());
+
+        let chaves = rel.chaves();
+        for esperada in [
+            "chave-duplicada",           // passo "P2" e id "FA-02"
+            "chave-vazia",               // passo = ""
+            "referencia-nao-encontrada", // ancora = "P9"
+        ] {
+            assert!(
+                chaves.contains(&esperada),
+                "esperava '{esperada}'; obtive {chaves:?}"
+            );
+        }
+
+        // Duas coleções diferentes acusam duplicata: a mecânica de chave
+        // não é um caso especial do fluxo principal.
+        assert_eq!(
+            chaves.iter().filter(|c| **c == "chave-duplicada").count(),
+            2
+        );
+    }
+
+    /// Fluxo alternativo global (o "*a" de Cockburn) não tem a que
+    /// ancorar. Se isso virasse erro, o schema estaria forçando a
+    /// invenção de uma âncora.
+    #[test]
+    fn fluxo_alternativo_sem_ancora_nao_gera_diagnostico() {
+        let schema = schema_v3();
+        let rel = validar_arquivo(
+            &schema,
+            "elemento-requisito-v3",
+            &fixture("exemplo-v3-invalido.toml"),
+        );
+
+        // FA-04, o único sem âncora, é o item [3].
+        assert!(
+            !rel.diagnosticos.iter().any(
+                |d| matches!(&d.local, Local::Campo(c) if c.starts_with("fluxos_alternativos[3]"))
+            ),
+            "o fluxo sem âncora não deveria render diagnóstico: {:?}",
+            rel.chaves()
+        );
+    }
+
+    /// A chave é indexada pelo alias do idioma declarado, então a mesma
+    /// referência precisa resolver num arquivo escrito em inglês.
+    #[test]
+    fn indice_de_chaves_resolve_pelos_aliases_do_idioma() {
+        let schema = schema_v3();
+        let campos = campos_caso_de_uso_v3(&schema);
+
+        let arquivo: toml::value::Table = toml::from_str(
+            r#"
+            [[main_flow]]
+            step = "P1"
+            action = "algo acontece"
+            "#,
+        )
+        .expect("fixture em memória não parseia");
+
+        let mut diags = Vec::new();
+        let indice = indexar_chaves(&campos, &arquivo, "en", &mut diags);
+
+        assert!(diags.is_empty(), "diagnósticos inesperados: {diags:?}");
+        assert!(indice
+            .valores("fluxo_principal.passo")
+            .expect("destino não indexado")
+            .contains_key("P1"));
+    }
+
+    /// Destino declarado mas sem nenhum valor no arquivo é defeito do
+    /// arquivo (erro); destino que não é chave é defeito do schema
+    /// (aviso). Os dois chegariam ao índice como "não encontrei nada" se
+    /// o índice não registrasse o destino vazio.
+    #[test]
+    fn referencia_distingue_colecao_vazia_de_destino_invalido() {
+        let schema = schema_v3();
+        let campos = campos_caso_de_uso_v3(&schema);
+        let vazio = toml::value::Table::new();
+
+        let mut diags = Vec::new();
+        let indice = indexar_chaves(&campos, &vazio, "pt", &mut diags);
+        let ctx = Ctx {
+            idioma: "pt",
+            indice: &indice,
+        };
+
+        let def_ancora = campos["fluxos_alternativos"].subcampos["ancora"].clone();
+
+        let mut d = Vec::new();
+        validar_referencia(&def_ancora, "P1", &ctx, "fluxos_alternativos[0].ancora", &mut d);
+        assert_eq!(d[0].msg.chave_e_args().0, "referencia-sem-alvos");
+        assert_eq!(d[0].nivel, Nivel::Erro);
+
+        let mut torto = def_ancora.clone();
+        torto.referencia = Some(DefReferencia {
+            campo: "fluxo_principal".to_string(),
+            subcampo: "acao".to_string(), // existe, mas não é chave
+        });
+
+        let mut d = Vec::new();
+        validar_referencia(&torto, "P1", &ctx, "fluxos_alternativos[0].ancora", &mut d);
+        assert_eq!(d[0].msg.chave_e_args().0, "referencia-destino-invalido");
+        assert_eq!(d[0].nivel, Nivel::Aviso, "culpa do schema não reprova o arquivo");
+    }
+
+    /// A fixture rica escrita para o v2 precisa continuar valendo no v3 —
+    /// é o que sustenta que o v3 formaliza a estrutura que já existia, em
+    /// vez de inventar outra. O único diagnóstico legítimo é a divergência
+    /// de versão declarada.
+    #[test]
+    fn fixture_completa_do_v2_vale_no_v3() {
+        let schema = schema_v3();
+        let rel = validar_arquivo(&schema, "elemento-requisito-v3", &fixture("completo-pt.toml"));
+        assert!(rel.valido(), "erros: {:?}", rel.chaves());
+        assert_eq!(rel.chaves(), vec!["versao-divergente"]);
+    }
+
+    /// Um arquivo v1 validado contra o v3 precisa acusar a mudança de
+    /// forma do fluxo principal — é o aviso de migração. O diagnóstico
+    /// sai por item (`esperado-tabela`), e não no campo inteiro: uma
+    /// lista de strings ainda é uma lista, então quem reclama é a
+    /// validação de cada passo, apontando o índice a corrigir.
+    #[test]
+    fn arquivo_v1_contra_schema_v3_acusa_a_mudanca_do_fluxo_principal() {
+        let schema = schema_v3();
+        let rel = validar_arquivo(&schema, "elemento-requisito-v3", &fixture("exemplo-pt.toml"));
+        assert!(!rel.valido());
+
+        let chaves = rel.chaves();
+        assert!(
+            chaves.contains(&"esperado-tabela"),
+            "esperava 'esperado-tabela' por passo; obtive {chaves:?}"
+        );
+        // O fluxo alternativo do v1 não tinha id próprio, que o v3 exige.
+        assert!(chaves.contains(&"subcampo-obrigatorio-ausente"));
+
+        let locais: Vec<String> = rel
+            .diagnosticos
+            .iter()
+            .filter_map(|d| match &d.local {
+                Local::Campo(c) => Some(c.clone()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            locais.iter().any(|c| c == "fluxo_principal[0]"),
+            "o local precisa apontar o passo a migrar; obtive {locais:?}"
+        );
     }
 
     #[test]

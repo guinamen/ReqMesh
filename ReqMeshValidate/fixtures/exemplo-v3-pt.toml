@@ -1,0 +1,68 @@
+schema_id = "elemento-requisito-v3;pt_BR"
+
+id = "01-login-usuario"
+tipo = "caso_de_uso"
+nome = "Login do usuário"
+
+gatilho = "Usuário acessa a página inicial e clica em 'Entrar'"
+prioridade = "alta"
+nivel = "objetivo_usuario"
+frequencia = "Múltiplas vezes por dia, por usuário"
+
+descricao = """
+Permite que o usuário autentique-se no sistema usando **e-mail e senha**.
+"""
+
+pre_condicoes = ["Usuário possui conta cadastrada"]
+
+pos_condicoes = ["Usuário autenticado com sessão ativa"]
+garantia_minima = ["Nenhuma sessão parcial ou inconsistente é criada em caso de falha"]
+requisitos_especiais = ["Resposta em até 1 segundo em 95% das tentativas"]
+questoes_em_aberto = ["Definir política de bloqueio após tentativas malsucedidas"]
+
+[[fluxo_principal]]
+passo = "P1"
+acao = "Usuário informa e-mail e senha"
+
+[[fluxo_principal]]
+passo = "P2"
+acao = "Sistema valida credenciais"
+
+[[fluxo_principal]]
+passo = "P3"
+acao = "Sistema redireciona para o painel"
+
+[[fluxos_alternativos]]
+id = "FA-01"
+ancora = "P2"
+condicao = "Credenciais inválidas"
+passos = [
+  "Sistema exibe mensagem de erro",
+  "Retorna ao passo P1 do fluxo principal",
+]
+
+# Sem âncora de propósito: vale para o caso de uso inteiro, não para um
+# passo. É o "*a" de Cockburn — e a razão de `ancora` ser opcional.
+[[fluxos_alternativos]]
+id = "FA-02"
+condicao = "Usuário abandona a página em qualquer ponto"
+passos = ["Sistema descarta a tentativa sem criar sessão"]
+
+[[regras_de_negocio]]
+id = "RN-01"
+enunciado = "Três tentativas malsucedidas consecutivas bloqueiam novas tentativas por 15 minutos."
+
+[[criterios_aceitacao]]
+id = "CA-01"
+dado = "uma conta cadastrada e ativa"
+quando = "o usuário informa e-mail e senha corretos"
+entao = "o sistema cria a sessão e redireciona para o painel"
+
+[[relacoes]]
+tipo = "incluir"
+alvo = "02-validar-credenciais"
+
+[[relacoes]]
+tipo = "interage_com"
+alvo = "ATOR-USUARIO"
+papel = "primario"

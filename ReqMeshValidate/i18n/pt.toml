@@ -101,5 +101,13 @@ subcampo-obrigatorio-ausente = "subcampo obrigatório ausente (canônico: '{cano
 tipo-dado-desconhecido = "schema declara tipo_dado desconhecido '{tipo_dado}' — campo não verificado"
 sem-subcampos = "o schema não define subcampos para esta tabela — conteúdo não verificado"
 
+chave-vazia = "campo de chave não pode ser vazio — é ele que identifica o item"
+chave-duplicada = "valor de chave '{valor}' repetido; já usado em '{anterior}'"
+
+referencia-nao-encontrada = "'{valor}' não corresponde a nenhum '{destino}' declarado neste arquivo (declarados: {disponiveis})"
+referencia-sem-alvos = "referência a '{destino}', mas o arquivo não declara nenhum"
+referencia-sem-destino = "o schema declara '{campo}' como referência sem dizer para onde — campo não verificado"
+referencia-destino-invalido = "o schema aponta '{campo}' para '{destino}', que não é chave de nenhuma coleção — campo não verificado"
+
 alias-ambiguo = "alias '{alias}' ({idioma}) é ambíguo: mapeia para '{anterior}' e '{atual}'"
 sem-alias-no-idioma = "campo '{canonico}' não tem alias no idioma '{idioma}' — não pode ser usado neste arquivo"
